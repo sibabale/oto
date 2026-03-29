@@ -1,6 +1,8 @@
 from datetime import date
 
+from app.config import get_settings
 from app.models.financials import CompanyResearchResponse, FinancialYear, ResearchScore
+
 
 # Oldest→newest mock facts; fiscal years are assigned as [anchor-4, …, anchor].
 _MOCK_FACTS_OLDEST_FIRST: list[dict[str, float]] = [
@@ -62,8 +64,7 @@ _MOCK_FACTS_OLDEST_FIRST: list[dict[str, float]] = [
 ]
 
 
-def _rolling_five_year_window(anchor_year: int) -> list[FinancialYear]:
-    """Five fiscal years inclusive ending at anchor_year (oldest first)."""
+def _rolling_mock_window(anchor_year: int) -> list[FinancialYear]:
     start = anchor_year - 4
     return [
         FinancialYear(fiscal_year=start + i, **_MOCK_FACTS_OLDEST_FIRST[i])
@@ -71,22 +72,20 @@ def _rolling_five_year_window(anchor_year: int) -> list[FinancialYear]:
     ]
 
 
-def get_company_research(
-    ticker: str, *, anchor_year: int | None = None
+def _build_response(
+    ticker: str, company_name: str, history_oldest_first: list[FinancialYear]
 ) -> CompanyResearchResponse:
-    normalized = ticker.upper()
-    year = anchor_year if anchor_year is not None else date.today().year
-    history = _rolling_five_year_window(year)
+    if not history_oldest_first:
+        raise ValueError("history_oldest_first must not be empty")
 
-    latest = history[-1]
+    latest = history_oldest_first[-1]
     debt_to_equity = (
         latest.total_liabilities / latest.total_equity if latest.total_equity else 0.0
     )
     net_margin = latest.net_income / latest.revenue if latest.revenue else 0.0
+    first = history_oldest_first[0]
     revenue_growth = (
-        (history[-1].revenue - history[0].revenue) / history[0].revenue
-        if history[0].revenue
-        else 0.0
+        (latest.revenue - first.revenue) / first.revenue if first.revenue else 0.0
     )
 
     profitability = round(min(100.0, max(0.0, net_margin * 400)), 2)
@@ -99,9 +98,9 @@ def get_company_research(
     )
 
     return CompanyResearchResponse(
-        ticker=normalized,
-        company_name=f"{normalized} Incorporated",
-        years=list(reversed(history)),
+        ticker=ticker.upper(),
+        company_name=company_name,
+        years=list(reversed(history_oldest_first)),
         score=ResearchScore(
             total=total_score,
             profitability=profitability,
@@ -110,3 +109,39 @@ def get_company_research(
             valuation=valuation,
         ),
     )
+
+
+def get_company_research(
+    ticker: str, *, anchor_year: int | None = None
+) -> CompanyResearchResponse:
+    settings = get_settings()
+    normalized = ticker.upper().strip()
+    year = anchor_year if anchor_year is not None else date.today().year
+
+    if settings.research_data_source.strip().lower() == "mock":
+        history = _rolling_mock_window(year)
+        return _build_response(
+            normalized, f"{normalized} Incorporated", history
+        )
+
+    from app.services.sec_edgar import load_financial_history
+
+    company_name, rows = load_financial_history(
+        normalized, anchor_year=year, max_years=5
+    )
+    history = [
+        FinancialYear(
+            fiscal_year=int(r["fiscal_year"]),
+            revenue=float(r["revenue"]),
+            gross_profit=float(r["gross_profit"]),
+            operating_income=float(r["operating_income"]),
+            net_income=float(r["net_income"]),
+            total_assets=float(r["total_assets"]),
+            total_liabilities=float(r["total_liabilities"]),
+            total_equity=float(r["total_equity"]),
+            total_debt=float(r["total_debt"]),
+            cash_and_equivalents=float(r["cash_and_equivalents"]),
+        )
+        for r in rows
+    ]
+    return _build_response(normalized, company_name, history)
