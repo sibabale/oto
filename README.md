@@ -10,7 +10,8 @@ An open-source-friendly starter for:
 
 - Backend: FastAPI + Pydantic + Pytest
 - Frontend: Next.js (App Router) + TypeScript + Tailwind + Vitest
-- Data/Trading integrations (planned): SEC EDGAR CompanyFacts, Alpaca paper trading
+- Data: SEC EDGAR CompanyFacts (free, official; set `OTO_SEC_USER_AGENT` with a real contact email)
+- Trading integrations (planned): Alpaca paper trading
 
 ## Project structure
 
@@ -44,6 +45,15 @@ Run tests:
 pytest
 ```
 
+**SEC EDGAR (real company data):** The SEC expects a descriptive `User-Agent` including contact information. Example:
+
+```bash
+export OTO_SEC_USER_AGENT="YourApp/1.0 (your@email.com)"
+export OTO_RESEARCH_DATA_SOURCE=sec
+```
+
+Use `OTO_RESEARCH_DATA_SOURCE=mock` for offline or CI (tests default to mock via `tests/conftest.py`).
+
 ### 2) Frontend
 
 ```bash
@@ -60,7 +70,7 @@ npm test
 
 ## Immediate next steps
 
-1. Replace stub financial data with SEC CompanyFacts ingestion.
+1. ~~Replace stub financial data with SEC CompanyFacts ingestion.~~ (Done: `GET /api/v1/research/{ticker}` uses SEC when `OTO_RESEARCH_DATA_SOURCE=sec`, default in production code. Tests use `OTO_RESEARCH_DATA_SOURCE=mock`.)
 2. Wire `/api/v1/trades` to Alpaca paper endpoint.
 3. Add auth + per-user portfolios.
 4. Add persistence (Postgres + migrations).
