@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     api_prefix: str = "/api/v1"
     default_ticker: str = "AAPL"
+    # SEC requires a descriptive User-Agent with contact (see https://www.sec.gov/os/webmaster-faq)
+    sec_user_agent: str = "OTO-Research/0.1 (oto-backend; contact: dev@localhost)"
+    # "sec" uses SEC EDGAR CompanyFacts; "mock" uses in-memory sample data (tests/offline).
+    research_data_source: str = "sec"
 
 
 @lru_cache
